@@ -51,10 +51,7 @@ public class ItemController {
     public List<ItemDto> searchItem(@RequestHeader(value = "X-Sharer-User-Id", defaultValue = "0") long userId,
                                     @RequestParam(defaultValue = "") String text) {
         log.info("IC -> запрос на поиск item по тексту {}", text);
-        if (text.isBlank()) {
-            return List.of();
-        } else {
-            return itemService.findAllByText(userId, text);
-        }
+
+        return itemService.findAllByText(userId, text);
     }
 }

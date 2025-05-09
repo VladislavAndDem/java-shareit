@@ -69,6 +69,15 @@ public class ItemServiceImpl implements ItemService {
             item.setDescription(itemDto.getDescription());
         } else if (itemDto.getName() == null && itemDto.getDescription() == null) {
             item.setAvailable(itemDto.getAvailable());
+        } else if (itemDto.getDescription() == null) {
+            item.setName(itemDto.getName());
+            item.setAvailable(itemDto.getAvailable());
+        } else if (itemDto.getName() == null) {
+            item.setDescription(itemDto.getDescription());
+            item.setAvailable(itemDto.getAvailable());
+        } else if (itemDto.getAvailable() == null) {
+            item.setName(itemDto.getName());
+            item.setDescription(itemDto.getDescription());
         } else {
             item.setAvailable(Boolean.TRUE.equals(itemDto.getAvailable()));
             item.setName(itemDto.getName());
@@ -107,9 +116,13 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public List<ItemDto> findAllByText(long userId, String text) {
         log.info("Начался процесс поиска");
+        if (text.isBlank()) {
+            return List.of();
+        }
         List<Item> items = itemStorage.getAllItems();
+
         return items.stream()
-                .filter(item -> item.getOwner() == userId)
+                //.filter(item -> item.getOwner() == userId)
                 .filter(Item::isAvailable) // Проверка доступности вещи
                 .filter(item -> item.getName().toLowerCase().contains(text.toLowerCase())
                         || item.getDescription().toLowerCase().contains(text.toLowerCase())) // Поиск по тексту
