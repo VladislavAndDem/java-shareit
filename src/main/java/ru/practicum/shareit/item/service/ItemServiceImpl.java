@@ -2,16 +2,27 @@ package ru.practicum.shareit.item.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import ru.practicum.shareit.booking.BookingStatus;
+import ru.practicum.shareit.booking.mapper.BookingMapper;
+import ru.practicum.shareit.booking.model.Booking;
+import ru.practicum.shareit.booking.repository.BookingRepository;
 import ru.practicum.shareit.exception.InternalServerException;
 import ru.practicum.shareit.exception.NotFoundException;
+import ru.practicum.shareit.item.dto.CommentDto;
 import ru.practicum.shareit.item.dto.ItemDto;
+import ru.practicum.shareit.item.mapper.CommentMapper;
 import ru.practicum.shareit.item.mapper.ItemMapper;
+import ru.practicum.shareit.item.model.Comment;
 import ru.practicum.shareit.item.model.Item;
-import ru.practicum.shareit.item.storage.ItemStorage;
-import ru.practicum.shareit.user.dto.UserDTO;
+import ru.practicum.shareit.item.repository.CommentRepository;
+import ru.practicum.shareit.item.repository.ItemRepository;
+import ru.practicum.shareit.user.model.User;
+import ru.practicum.shareit.user.repository.UserRepository;
 import ru.practicum.shareit.user.service.UserService;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,15 +30,19 @@ import java.util.Optional;
 @Slf4j
 public class ItemServiceImpl implements ItemService {
     private final UserService userService;
-    private final ItemStorage itemStorage;
-    private final ItemMapper itemMapper;
-    private long id;
+    private final CommentRepository commentRepository;
+    private final ItemRepository itemRepository;
+    private final BookingRepository bookingRepository;
+    private final UserRepository userRepository;
 
     @Autowired
-    public ItemServiceImpl(UserService userService, ItemStorage itemStorage, ItemMapper itemMapper) {
+    public ItemServiceImpl(UserService userService, ItemRepository itemRepository, CommentRepository commentRepository,
+                           BookingRepository bookingRepository, UserRepository userRepository) {
         this.userService = userService;
-        this.itemStorage = itemStorage;
-        this.itemMapper = itemMapper;
+        this.itemRepository = itemRepository;
+        this.commentRepository = commentRepository;
+        this.bookingRepository = bookingRepository;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -38,78 +53,80 @@ public class ItemServiceImpl implements ItemService {
             throw new InternalServerException("Id должен быть указан");
         }
         if (itemDto.getName().isBlank() || itemDto.getDescription().isBlank()) {
-            log.error("InternalServerException - name или description не может быть пустым");
+            log.error("InternalServerException - name или description не могут быть пустым");
             throw new InternalServerException("name или description должны быть указаны");
         }
-        userService.getUserById(userId);
+        if (!userService.existsById(userId)) {
+            throw new NotFoundException("Пользователь с id = " + userId + " не найден");
+        }
 
-        Item item = itemMapper.toItem(itemDto);
+        Item item = Item.builder()
+                .name(itemDto.getName())
+                .description(itemDto.getDescription())
+                .available(itemDto.getAvailable())
+                .owner(User.builder().id(userId).build()) // Устанавливаем владельца по userId
+                .build();
 
-        item.setId(++id);
-        item.setOwner(userId);
-
-        itemStorage.create(item);
-        log.info("Item создан {}", item);
-        return itemMapper.toItemDto(item);
+        log.info("Перед сохранением item");
+        Item itemInDb = itemRepository.save(item);
+        log.info("Item сохранен в бд {}", itemInDb);
+        return ItemMapper.toItemDto(itemInDb);
     }
 
     @Override
     public ItemDto update(long userId, long itemId, ItemDto itemDto) {
-        log.info("IS -> пришли параметры на обновление item userId - {}, itemId {} и ItemDto - {}", userId, itemId, itemDto);
+        log.info("IS -> пришли параметры на обновление oldItem userId - {}, itemId {} и ItemDto - {}", userId, itemId, itemDto);
         if (userId == 0) {
             log.error("InternalServerException - не указан заголовок и его значение");
             throw new InternalServerException("Id должен быть указан");
         }
-        ItemDto oldItemDto = getItemByIdFromUser(userId, itemId);
-        Item item = itemMapper.toItem(oldItemDto);
-
-        if (itemDto.getDescription() == null && itemDto.getAvailable() == null) {
-            item.setName(itemDto.getName());
-        } else if (itemDto.getName() == null && itemDto.getAvailable() == null) {
-            item.setDescription(itemDto.getDescription());
-        } else if (itemDto.getName() == null && itemDto.getDescription() == null) {
-            item.setAvailable(itemDto.getAvailable());
-        } else if (itemDto.getDescription() == null) {
-            item.setName(itemDto.getName());
-            item.setAvailable(itemDto.getAvailable());
-        } else if (itemDto.getName() == null) {
-            item.setDescription(itemDto.getDescription());
-            item.setAvailable(itemDto.getAvailable());
-        } else if (itemDto.getAvailable() == null) {
-            item.setName(itemDto.getName());
-            item.setDescription(itemDto.getDescription());
-        } else {
-            item.setAvailable(Boolean.TRUE.equals(itemDto.getAvailable()));
-            item.setName(itemDto.getName());
-            item.setDescription(itemDto.getDescription());
+        Optional<Item> oldItemOpt = itemRepository.findById(itemId);
+        if (oldItemOpt.isEmpty()) {
+            throw new NotFoundException("Пользователь с id = " + itemId + " не найден");
+        }
+        Item oldItem = oldItemOpt.get();
+        if (oldItem.getOwner().getId() != userId) {
+            throw new NotFoundException("Вы не являетесть владельцем вещи");
         }
 
-        item.setId(oldItemDto.getId());
-        itemStorage.update(itemId, item);
-        return itemMapper.toItemDto(item);
+        if (itemDto.getName() != null) {
+            oldItem.setName(itemDto.getName());
+        }
+        if (itemDto.getDescription() != null) {
+            oldItem.setDescription(itemDto.getDescription());
+        }
+        if (itemDto.getAvailable() != null) {
+            oldItem.setAvailable(itemDto.getAvailable());
+        }
+
+        if (itemDto.getAvailable() != null) {
+            oldItem.setAvailable(itemDto.getAvailable());
+        }
+
+        itemRepository.save(oldItem);
+        return ItemMapper.toItemDto(oldItem);
     }
 
     @Override
     public ItemDto getItemByIdFromUser(long userId, long itemId) {
-        Optional<Item> itemOptional = itemStorage.getItemById(itemId);
-        UserDTO userDTO = userService.getUserById(userId);
-        if (itemOptional.isEmpty()) {
+        Optional<Item> itemOpt = itemRepository.findById(itemId);
+
+        if (itemOpt.isEmpty()) {
             log.info("NotFoundException - item не найден");
             throw new NotFoundException("Item с id " + itemId + " не найден");
         }
-        if (itemOptional.get().getOwner() != userDTO.getId()) {
-            throw new NotFoundException("У item нет владельца");
-        }
+        ItemDto itemDto = ItemMapper.toItemDto(itemOpt.get());
 
-        return itemMapper.toItemDto(itemOptional.get());
+        loadDetails(itemDto);
+        return itemDto;
     }
 
     @Override
     public List<ItemDto> getAllItemFromUser(long userId) {
-        List<Item> items = itemStorage.getAllItems();
+        List<Item> items = itemRepository.findAll();
         return items.stream()
-                .filter(item -> item.getOwner() == userId)
-                .map(itemMapper::toItemDto)
+                .filter(item -> item.getOwner().getId() == userId)
+                .map(ItemMapper::toItemDto)
                 .toList();
     }
 
@@ -119,14 +136,78 @@ public class ItemServiceImpl implements ItemService {
         if (text.isBlank()) {
             return List.of();
         }
-        List<Item> items = itemStorage.getAllItems();
 
-        return items.stream()
-                //.filter(item -> item.getOwner() == userId)
-                .filter(Item::isAvailable) // Проверка доступности вещи
-                .filter(item -> item.getName().toLowerCase().contains(text.toLowerCase())
-                        || item.getDescription().toLowerCase().contains(text.toLowerCase())) // Поиск по тексту
-                .map(itemMapper::toItemDto)
+        List<Item> items1 = itemRepository.findAllByText(text);
+
+        return items1.stream()
+                .map(ItemMapper::toItemDto)
                 .toList();
+    }
+
+
+    @Override
+    public Item getItemOptionalById(long itemId) {
+        Optional<Item> itemOptional = itemRepository.findById(itemId);
+        if (itemOptional.isEmpty()) {
+            throw new NotFoundException("Item с id " + itemId + " не найден");
+        }
+        return itemOptional.get();
+    }
+
+
+    @Override
+    public CommentDto saveComment(long userId, long itemId, CommentDto commentDto) {
+        Optional<User> user = userRepository.findById(userId);
+        if (user.isEmpty()) {
+            throw new NotFoundException("Пользователь не найден");
+        }
+        Optional<Item> item = itemRepository.findById(itemId);
+        if (item.isEmpty()) {
+            throw new NotFoundException("Вещь не найдена");
+        }
+        List<Booking> bookings = bookingRepository.findAllBookingByBookerIdAndItemId(userId, itemId);
+        if (bookings.isEmpty()) {
+            throw new NotFoundException("Вы не брали вещь в аренду");
+        }
+        List<Booking> bookings1 = bookings.stream()
+                .filter(booking -> booking.getEnd().isBefore(LocalDateTime.now()))
+                .filter(booking -> booking.getStatus().equals(BookingStatus.APPROVED))
+                .toList();
+
+        if (bookings1.isEmpty()) {
+            throw new InternalServerException("Нельзя оствить отзыв, пока не завершена аренда и пока владалец вещи" +
+                    " не одобрил бронирование");
+        }
+
+        Comment comment = Comment.builder()
+                .text(commentDto.getText())
+                .item(item.get())
+                .authorName(user.get().getName())
+                .created(LocalDateTime.now())
+                .build();
+
+        Comment commentInDb = commentRepository.save(comment);
+        return CommentMapper.toCommentDto(commentInDb);
+    }
+
+    public void loadDetails(ItemDto itemDto) {
+        List<Comment> comments = commentRepository.findAllByItemId(itemDto.getId());
+        itemDto.setComments(comments.stream()
+                .map(CommentMapper::toCommentDto)
+                .toList());
+
+        List<Booking> bookings = bookingRepository.findAllByItemOwnerId(itemDto.getId(),
+                Sort.by(Sort.Direction.DESC, "start"));
+
+        if (!bookings.isEmpty()) {
+            Booking nextBooking = bookings.get(0);
+            itemDto.setNextBooking(BookingMapper.toBookingDto(nextBooking));
+
+            if (bookings.size() > 1) {
+                itemDto.setLastBooking(BookingMapper.toBookingDto(bookings.get(1)));
+            } else {
+                itemDto.setLastBooking(BookingMapper.toBookingDto(nextBooking));
+            }
+        }
     }
 }

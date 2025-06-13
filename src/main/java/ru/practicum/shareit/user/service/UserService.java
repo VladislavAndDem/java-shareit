@@ -14,4 +14,6 @@ public interface UserService {
     UserDTO getUserById(long id);
 
     List<UserDTO> getAllUsers();
+
+    boolean existsById(Long id);
 }
