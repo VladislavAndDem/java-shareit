@@ -1,7 +1,7 @@
 package ru.practicum.shareit.item.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import ru.practicum.shareit.booking.BookingStatus;
@@ -28,22 +28,13 @@ import java.util.Optional;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class ItemServiceImpl implements ItemService {
     private final UserService userService;
     private final CommentRepository commentRepository;
     private final ItemRepository itemRepository;
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
-
-    @Autowired
-    public ItemServiceImpl(UserService userService, ItemRepository itemRepository, CommentRepository commentRepository,
-                           BookingRepository bookingRepository, UserRepository userRepository) {
-        this.userService = userService;
-        this.itemRepository = itemRepository;
-        this.commentRepository = commentRepository;
-        this.bookingRepository = bookingRepository;
-        this.userRepository = userRepository;
-    }
 
     @Override
     public ItemDto create(long userId, ItemDto itemDto) {
