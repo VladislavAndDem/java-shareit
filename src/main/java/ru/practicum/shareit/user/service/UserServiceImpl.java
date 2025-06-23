@@ -1,7 +1,7 @@
 package ru.practicum.shareit.user.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import ru.practicum.shareit.exception.DuplicateException;
 import ru.practicum.shareit.exception.NotFoundException;
@@ -9,7 +9,7 @@ import ru.practicum.shareit.exception.ValidationException;
 import ru.practicum.shareit.user.dto.UserDTO;
 import ru.practicum.shareit.user.mapper.UserMapper;
 import ru.practicum.shareit.user.model.User;
-import ru.practicum.shareit.user.storage.UserStorage;
+import ru.practicum.shareit.user.repository.UserRepository;
 
 import java.util.Collection;
 import java.util.List;
@@ -18,29 +18,21 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
-    private final UserStorage userStorage;
-    private final UserMapper userMapper;
-    private long id = 0;
-
-    @Autowired
-    public UserServiceImpl(UserStorage userStorage, UserMapper userMapper) {
-        this.userStorage = userStorage;
-        this.userMapper = userMapper;
-    }
+    private final UserRepository userRepository;
 
     @Override
     public UserDTO createUser(UserDTO userDTO) {
-        log.info("USV -> createUser {}", userDTO);
+        log.info("USV -> start process create User {}", userDTO);
         if (userDTO.getEmail() == null || userDTO.getEmail().isBlank() || !userDTO.getEmail().contains("@")) {
             String str = "Имейл должен быть указан, содержать символ '@'";
             log.error(str);
             throw new ValidationException(str);
         }
         checkFreeEmail(userDTO);
-        userDTO.setId(++id);
-        log.info("Инициализация id = {}", userDTO.getId());
-        return userMapper.toUserDTO(userStorage.create(userMapper.toUser(userDTO)));
+
+        return UserMapper.toUserDTO(userRepository.save(UserMapper.toUserWithoutId(userDTO)));
     }
 
     @Override
@@ -51,22 +43,27 @@ public class UserServiceImpl implements UserService {
             throw new ValidationException("Id должен быть указан");
         }
         checkFreeEmail(newUserDTO);
-        UserDTO oldUserDTO = getUserById(id);
-        User newUser = new User(id, newUserDTO.getName(), newUserDTO.getEmail());
-        if (newUser.getEmail() != null && !checkEmail(newUser, userStorage.getAllUsers())) {
-            log.debug("Обновление имейла {}", newUser.getEmail());
-            oldUserDTO.setEmail(newUser.getEmail());
+        Optional<User> oldUserOpt = userRepository.findById(id);
+
+        if (oldUserOpt.isEmpty()) {
+            throw new NotFoundException("Пользователь с id = " + id + " не найден");
         }
-        if (newUser.getName() != null) {
+        User oldUser = oldUserOpt.get();
+        User newUser = new User(oldUser.getId(), newUserDTO.getName(), newUserDTO.getEmail());
+        if (newUserDTO.getEmail() != null && !checkEmail(newUser, userRepository.findAll())) {
+            log.debug("Обновление имейла {}", newUser.getEmail());
+            oldUser.setEmail(newUser.getEmail());
+        }
+        if (newUserDTO.getName() != null) {
             log.debug("Обновление имени {}", newUser.getName());
-            oldUserDTO.setName(newUser.getName());
+            oldUser.setName(newUser.getName());
         }
         log.info("Данный пользователя обновляются");
-        return userMapper.toUserDTO(userStorage.update(id, userMapper.toUser(oldUserDTO)));
+
+        return UserMapper.toUserDTO(userRepository.save(oldUser));
     }
 
     private boolean checkEmail(User user, Collection<User> userCollection) {
-
         return userCollection
                 .stream()
                 .filter(u -> u.getEmail().equals(user.getEmail())) // Фильтруем по email
@@ -74,7 +71,7 @@ public class UserServiceImpl implements UserService {
     }
 
     private boolean checkFreeEmail(UserDTO userDTO) {
-        List<User> users = userStorage.getAllUsers();
+        List<User> users = userRepository.findAll();
 
         boolean emailExists = users.stream()
                 .anyMatch(existingUser -> existingUser.getEmail().equals(userDTO.getEmail()));
@@ -91,26 +88,35 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void deleteUserById(long id) {
-        userStorage.deleteUserById(id);
+        userRepository.deleteById(id);
     }
 
     @Override
     public UserDTO getUserById(long id) {
 
-        Optional<User> userOptional = userStorage.getUserById(id);
+        Optional<User> userOptional = userRepository.findById(id);
         if (userOptional.isEmpty()) {
             throw new NotFoundException("Пользователь с id = " + id + " не найден");
         }
         User user = userOptional.get();
         log.info("US -> пользователь с id {} найден", id);
-        return userMapper.toUserDTO(user);
+        return UserMapper.toUserDTO(user);
     }
 
     @Override
     public List<UserDTO> getAllUsers() {
-        List<User> users = userStorage.getAllUsers();
+        List<User> users = userRepository.findAll();
         return users.stream()
-                .map(userMapper::toUserDTO)
+                .map(UserMapper::toUserDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public boolean existsById(Long id) {
+        boolean userBool = userRepository.existsById(id);
+        if (!userBool) {
+            throw new NotFoundException("Пользователь не существует");
+        }
+        return userBool;
     }
 }

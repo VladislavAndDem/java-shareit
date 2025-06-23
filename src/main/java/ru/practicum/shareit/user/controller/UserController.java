@@ -1,8 +1,8 @@
 package ru.practicum.shareit.user.controller;
 
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import ru.practicum.shareit.user.dto.UserDTO;
 import ru.practicum.shareit.user.service.UserService;
@@ -10,15 +10,11 @@ import ru.practicum.shareit.user.service.UserService;
 import java.util.List;
 
 @RestController
+@RequiredArgsConstructor
 @Slf4j
 @RequestMapping(path = "/users")
 public class UserController {
     private final UserService userService;
-
-    @Autowired
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
 
     @PostMapping
     public UserDTO create(@Valid @RequestBody UserDTO userDTO) {
