@@ -13,6 +13,7 @@ import ru.practicum.shareit.user.repository.UserRepository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -67,7 +68,7 @@ public class UserServiceImpl implements UserService {
         return userCollection
                 .stream()
                 .filter(u -> u.getEmail().equals(user.getEmail())) // Фильтруем по email
-                .anyMatch(u -> u.getId() != user.getId()); // Проверяем, что это не тот же самый пользователь
+                .anyMatch(u -> !Objects.equals(u.getId(), user.getId())); // Проверяем, что это не тот же самый пользователь
     }
 
     private boolean checkFreeEmail(UserDTO userDTO) {
