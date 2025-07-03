@@ -15,9 +15,6 @@ import ru.practicum.shareit.item.service.ItemService;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.hamcrest.Matchers.hasSize;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-
 @WebMvcTest(ItemController.class)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 class ItemControllerTest {

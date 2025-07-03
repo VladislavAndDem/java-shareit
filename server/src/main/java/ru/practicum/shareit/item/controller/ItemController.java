@@ -51,7 +51,7 @@ public class ItemController {
                                     @RequestParam(defaultValue = "") String text) {
         log.info("IC -> запрос на поиск item по тексту {}", text);
 
-        return itemService.findAllByText( text);
+        return itemService.findAllByText(text);
     }
 
     @PostMapping(value = "/{itemId}/comment")
