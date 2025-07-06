@@ -88,7 +88,7 @@ public class RequestServiceTest {
         UserDTO user = userService.createUser(user1);
         RequestDto itemRequest = requestService.create(itemRequest1, user.getId());
 
-        List<RequestDto> itemRequests = requestService.findAll(user.getId(), 0, 10).stream().toList();
+        List<RequestDto> itemRequests = requestService.getAllRequestsById(user.getId()).stream().toList();
 
         assertThat(itemRequests).hasSize(1);
         assertThat(itemRequests.getFirst().getId()).isEqualTo(itemRequest.getId());

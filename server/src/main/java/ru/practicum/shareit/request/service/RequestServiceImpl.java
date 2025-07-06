@@ -67,6 +67,7 @@ public class RequestServiceImpl implements RequestService {
         return requestRepository.findAll(PageRequest.of((from / size), size,
                         Sort.by(Sort.Direction.DESC, "created")))
                 .stream()
+                .filter(request -> !request.getRequestor().getId().equals(userId))
                 .map(request -> {
                     RequestDto requestDto = RequestMapper.toRequestDto(request);
                     loadDetails(requestDto);

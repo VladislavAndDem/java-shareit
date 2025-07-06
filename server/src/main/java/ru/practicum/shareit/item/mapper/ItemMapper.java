@@ -17,6 +17,7 @@ public class ItemMapper {
                 .lastBooking(null)
                 .nextBooking(null)
                 .comments(new ArrayList<>())
+                .requestId(item.getRequest() != null ? item.getRequest().getId() : null)
                 .build();
     }
 }
